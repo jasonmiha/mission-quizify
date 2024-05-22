@@ -4,7 +4,7 @@ import streamlit as st
 sys.path.append(os.path.abspath('../../'))
 from tasks.task_3.task_3 import DocumentProcessor
 from tasks.task_4.task_4 import EmbeddingClient
-
+import chromadb
 
 # Import Task libraries
 from langchain_core.documents import Document
@@ -16,7 +16,7 @@ class ChromaCollectionCreator:
         """
         Initializes the ChromaCollectionCreator with a DocumentProcessor instance and embeddings configuration.
         :param processor: An instance of DocumentProcessor that has processed documents.
-        :param embeddings_config: An embedding client for embedding documents.
+        :param embed_model: An embedding client for embedding documents.
         """
         self.processor = processor      # This will hold the DocumentProcessor from Task 3
         self.embed_model = embed_model  # This will hold the EmbeddingClient from Task 4
@@ -32,7 +32,7 @@ class ChromaCollectionCreator:
         2. Split the processed documents into text chunks suitable for embedding and indexing. Use the CharacterTextSplitter from Langchain to achieve this. You'll need to define a separator, chunk size, and chunk overlap.
         https://python.langchain.com/docs/modules/data_connection/document_transformers/
         
-        3. Create a Chroma collection in memory with the text chunks obtained from step 2 and the embeddings model initialized in the class. Use the Chroma.from_documents method for this purpose.
+        3. Create a Chroma collection in memory with the text chunks obtained from step 2 and the embeddings model initialized in the class. Use the Chroma.from_texts method for this purpose.
         https://python.langchain.com/docs/integrations/vectorstores/chroma#use-openai-embeddings
         https://docs.trychroma.com/getting-started
         
@@ -56,20 +56,31 @@ class ChromaCollectionCreator:
         # Step 2: Split documents into text chunks
         # Use a TextSplitter from Langchain to split the documents into smaller text chunks
         # https://python.langchain.com/docs/modules/data_connection/document_transformers/character_text_splitter
-        # [Your code here for splitting documents]
+        text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200)
+        texts = []
+        for page in self.processor.pages:
+            texts.extend(text_splitter.split_text(page.page_content))
         
-        if texts is not None:
+        if texts:
             st.success(f"Successfully split pages to {len(texts)} documents!", icon="✅")
-
+        
         # Step 3: Create the Chroma Collection
         # https://docs.trychroma.com/
         # Create a Chroma in-memory client using the text chunks and the embeddings model
-        # [Your code here for creating Chroma collection]
+        self.db = Chroma.from_texts(texts, embedding=self.embed_model)
         
         if self.db:
             st.success("Successfully created Chroma Collection!", icon="✅")
         else:
             st.error("Failed to create Chroma Collection!", icon="🚨")
+
+    def get_retriever(self):
+        """
+        Get the retriever for the Chroma collection.
+        """
+        if not self.db:
+            raise ValueError("Chroma Collection has not been created yet.")
+        return self.db.as_retriever()
     
     def query_chroma_collection(self, query) -> Document:
         """
@@ -93,7 +104,7 @@ if __name__ == "__main__":
     
     embed_config = {
         "model_name": "textembedding-gecko@003",
-        "project": "YOUR PROJECT ID HERE",
+        "project": "gemini-quizify-423920",
         "location": "us-central1"
     }
     
